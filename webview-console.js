@@ -204,7 +204,7 @@ window.onerror=function(msg, srcdoc, ln, col, errmsg) {
   }
   else {
     ins = pre_ins + (ln-(css_ln+js_ln)+2) + ":" + col + post_ins
-    ecpup_console.innerHTML += s;
+    ecpup_console.innerHTML += ins;
   }
   return true; // set to false to cancel the event bubble [Original snippet: https://code.sololearn.com/WnfK9ry02dkS/?ref=app]
 }
