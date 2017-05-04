@@ -120,6 +120,10 @@ function ecpup_waitready() {
     }
   }
   // document is ready enough to adjust event line numbers and identify locations
+window.onunhandledrejection = function(event) {
+   event.preventDefault();
+   throw(new Error("(Unhandled Promise rejection; Use bluebird for stack traces) " + event.promise + " | "+ event.reason));
+}
 
   ecpup_insertConsole();
   ecpup_console = document.getElementById('ecpup_console');
@@ -222,10 +226,10 @@ window.onerror=function(msg, srcdoc, ln, col, errmsg) {
 /*window.onunhandledrejection = function(event) {
    if(ecpup_silencePromiseRejections){event.preventDefault();}
    throw(new Error("(Unhandled Promise rejection; Use bluebird for stack traces) " + event.promise + " | "+ event.reason));
-}*/
+}
 window.addEventListener("unhandledrejection",function(event) {
   if(ecpup_silencePromiseRejections){event.preventDefault();}
   throw(new Error("(Unhandled Promise rejection; Use bluebird for stack traces) " + event.promise + " | "+ event.reason))
-});
+});*/
 
 setTimeout(ecpup_waitready, 250);
