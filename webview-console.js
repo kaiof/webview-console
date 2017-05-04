@@ -1,10 +1,15 @@
-//"use strict"; 
 var ecpup_queue = [];
 var ecpup_ready=false;
-var ecpup_CSSlines = ecpup_JSlines = false;
+var ecpup_CSSlines = false;
+var ecpup_JSlines = false;
 var ecpup_console;
-var ecpup_cssStart = ecpup_jsStart = ecpup_jsEnd = false;
+var ecpup_cssStart = false;
+var ecpup_jsStart = false;
+var ecpup_jsEnd = false;
 var ecpup_adjustJS = 2; // skip doctype and html start tag
+var ecpup_callback = false;
+var ecpup_autopopup = true;
+
 function ecpup_count(o) {
   switch (typeof o) {
     case 'string':
@@ -15,7 +20,6 @@ function ecpup_count(o) {
       break;
   }
 }  
-
 function ecpup_newSpan(c, t) {
   var spann = document.createElement("span");
   spann.class = c;
@@ -23,36 +27,28 @@ function ecpup_newSpan(c, t) {
   return spann;
 }
 
-function ecpup_insertConsole(c) {
+function ecpup_insertConsole() {
   var doc = window.document;
 
   var divv = doc.createElement("div");
   
-  /*divv.setAttribute("innerHTML", '<div style="float:left;"><a href="#ecpup1" id="stub">Errors</a></div>' +
-  '<div id="ecpup1" class="ecpup">' +
-    '<div class="ecpupbox">' +
-      '<div class="ecpupScroll">' +
-        '<pre><span class=\'ecpupg\'>Line:Col Section</span>   Message  <span class=\'ecpupb\'>(document)</span></pre>' +
-        '<span id="ecpup_console"></span>' +
-        '<a href="#stub" class="ecpupclose"><span>Close</span></a>' +
-      '</div>' +
-    '</div>' +
-  '</div>');*/
-   
-  //divv.className="ecpupScroll";
   divv.setAttribute("class", "ecpupScroll");
     var pree = doc.createElement("pre");
     var spann = doc.createElement("span");
     spann.setAttribute("class", "ecpupg");
-    spann.innerHTML="Line:Col Section";
+    spann.innerHTML="Line:Col ";
     pree.appendChild(spann);
+    var spann = doc.createElement("span");
+    spann.setAttribute("class", "ecpupc");
+    spann.innerHTML="Section";
+    pree.appendChild(spann);    
     var txtEl=doc.createTextNode("   Message  ");
     pree.appendChild(txtEl);
     spann = doc.createElement("span");
     spann.setAttribute("class", "ecpupb");
     spann.innerHTML = "(document)";
     pree.appendChild(spann);
-  divv.appendChild(pree);  // this is all good
+  divv.appendChild(pree);
 
     spann = doc.createElement("span");
     spann.setAttribute("id", "ecpup_console");
@@ -62,8 +58,8 @@ function ecpup_insertConsole(c) {
     aa = doc.createElement("a");
     aa.setAttribute("class", "ecpupclose");
     aa.href = "#stub";
-    aa.text = "Close";
-  divv.appendChild(aa); // appears to be working (change class and it unhides);
+    aa.text = ""; // set by ::before
+  divv.appendChild(aa); // change class and it unhides
  
   var divvv = doc.createElement("div");
   divvv.setAttribute("class", "ecpupbox");
@@ -74,90 +70,78 @@ function ecpup_insertConsole(c) {
   divvvv.appendChild(divvv);
   
   try {
-    doc.body.replaceChild(divvvv, c);
+    doc.body.appendChild(divvvv);
   } catch(e) {
-    ff(e);
+    ecpup_altcomms("appendChild failed: " + e.message);
+  }
+}
+
+function ecpup_altcomms(msg) {
+  // TODO: Anyone care?  
+  //  Choose between console.error or alerts()
+  alert("Error Console: " + msg);
+}
+
+function ecpup_getLineAndSection(line) {
+  var calcline, errloc;
+  if(line < ecpup_jsStart) {
+    calcline = line;
+    errloc = "&lt;head&gt;";
+  } else if(line <= ecpup_jsEnd) {
+    calcline = line - ecpup_jsStart + 1; // offset in [JS] tab.
+    errloc = "[JS]";
+  } else {
+    calcline = line - ecpup_JSlines - ecpup_CSSlines + ecpup_adjustJS; // accommodate injections
+    errloc = "&lt;body&gt;";
   }
   
-  var ldivv = doc.createElement("div");
-  ldivv.id = "ecpup_link";
-    aa = doc.createElement("a");
-    aa.setAttribute("id", "stub");
-    aa.href = "#ecpup1"; // javascript:alert('f');//
-    aa.text = "Errors";
-  ldivv.appendChild(aa);
-  
-  try {
-    divvvv.parentNode.insertBefore(ldivv, divvvv.nextSibling); // emulate insertAfter()
-  } catch(e) {
-    alert(e);
-  }
-  
+  return {ln:calcline, loc:errloc};
 }
 
 function ecpup_waitready() {
-  var s,j,c;
+  var s,j;
+  var timeout_count=0;
   s=document.getElementById("style-from-editor");
   j=document.getElementById("script-from-editor");
-  c=document.getElementById("error_console");
+
   if(s) ecpup_CSSlines = ecpup_count(s);
   if(j) ecpup_JSlines = ecpup_count(j);
-  if(!(s && j && c)) {
-    setTimeout(ecpup_ready, 250);
-    // TODO: If user doesn't put the correct element in, it will wait forever. After a time, alert?
-    return false;
+  if(!(s && j)) {
+    timeout_count += 1;
+    if(timeout_count == 12) {
+      ecpup_altcomms("Unable to connect to document after 3 seconds; console will disconnect after 10 seconds.");
+    }
+    if(timeout_count > 40) {
+      ecpup_altcomms("ErrorConsole: Unable to connect to document after 10 seconds. Disconnecting.");
+    } else {
+      setTimeout(ecpup_ready, 250); // count-dependency
+      return false;
+    }
   }
   // document is ready enough to adjust event line numbers and identify locations
 
-  ecpup_insertConsole(c);
+  ecpup_insertConsole();
   ecpup_console = document.getElementById('ecpup_console');
-  c = ecpup_console;
+  var c = ecpup_console;
 
-  // TODO: Reduce user requirement to 1 div, then construct the receiving window
-  //var doc = window.document; 
-  //var script = doc.createElement("script"); 
-  //script.text = code; 
-  //doc.head.appendChild(script).parentNode.removeChild(script); 
-  
   var hd = document.getElementsByTagName("html")[0].innerHTML; // Assume <doctype>, and no intervening code before <html>.
-  var hd = hd.split('</head>'); // drop the end of the document
+  var hd = hd.split('<'+'/head>'); // drop the end of the document
   
-  // I don't anticipate these actually firing.
-  if(hd.length > 2) {
-    for(i=0; i<hd.length; i++){
-    alert(JSON.stringify(hd[i]));
-    }
-    alert("TODO: More than one </head> endtag; assuming first one found is correct.");
-  }
   if(hd.length < 2) {
-    alert("TODO: (?) This script isn't designed for documents without a <head></head> block.");
+    ecpup_altcomms("At least one <head> section is expected");
+  }
+  if(hd.length > 2) {
+    ecpup_altcomms("More than one <'+'/head> endtag; assuming first one found is correct.");
   }
   hd=hd[0];
 
-  var hdbits = hd.split('</style><script id="script-from-editor">'); // There should only be two bits
+  var hdbits = hd.split('<'+'/style><script id="script-from-editor">'); // There should only be two bits
   if(hdbits.length != 2) {
-    // TODO: 
-    alert('TODO: webview-console: One--and only one: </style><script id="script-from-editor"> block expected. Zero is "not SoloLearn"; multiple ID\'s is an error.');
-    alert("This alert sometimes occurs if you put HTML intended for BODY into HEAD!");
+    ecpup_altcomms('webview-console: One--and only one: <'+'/style><script id="script-from-editor"> block expected. \nZero is "not SoloLearn"; multiple ID\'s is an error. This sometimes occurs if BODY html is in HEAD!');
     // at least try to truncate
     hdbits = [hdbits[0],hdbits[1]]; // TODO: try..catch
   }
-  ecpup_beforeJS = ecpup_count(hdbits[0]); // work towards: At what line does inserted JS start?
-
-/* Don't care about CSS right now
-  
-  // TODO: Should verify this is here
-  stylebits = hdbits[0].split('\n<style id="style-from-editor">');
-  //scriptbit = hdbits[1];
-  
-  var ecpup_beforeCSS = ecpup_count(stylebits[0]);
-  // stylebits[1] is in ecpup_CSSlines (verified same already)
-  // var script_lines = ecpup_count(scriptbit); // unnecessary; use ecpup_JSlines
-    
-  alert(ecpup_beforeCSS + "," + style_lines + "," + ecpup_JSlines + "," + script_lines);
-  
-  alert(ecpup_beforeCSS);
-*/
+  ecpup_beforeJS = ecpup_count(hdbits[0]); // At what line does inserted JS start?
 
   ecpup_jsStart = ecpup_beforeJS + ecpup_adjustJS;
   ecpup_jsEnd = ecpup_jsStart + ecpup_JSlines;
@@ -170,45 +154,68 @@ function ecpup_waitready() {
     for(var i=0;i<l;i++) {
       s = ecpup_queue[i][0];
       line = ecpup_queue[i][1];
-      if(line < ecpup_jsStart) {
-        calcline = line;
-        errloc = "&lt;head&gt;";
-      } else if(line <= ecpup_jsEnd) {
-        calcline = line - ecpup_jsStart + 1; // offset in [JS] tab TODO: 1 off bug / couldn't duplicate?
-        errloc = "[JS]";
-      } else {
-        calcline = line - ecpup_JSlines - ecpup_CSSlines + ecpup_adjustJS; // accommodate injections
-        errloc = "&lt;body&gt;";
-      }
-      s = s.replace("{ln}", calcline); // can't chain replaces...
-      s = s.replace("{loc}", errloc);
+
+      var repaired = ecpup_getLineAndSection(line); 
+      
+      s = s.replace("{ln}", repaired.ln); // can't chain replaces...
+      s = s.replace("{loc}", repaired.loc);
 
       c.innerHTML += s;
     } 
   }
   
-  ecpup_ready = true; // if async, set this as soon as possible so new events don't end up in queue
+  ecpup_ready = true; // if async, set this as soon as possible to keep new events out of queue
   return true;
+}
+
+function ecpup_doAutopop() {
+    document.location.href="#ecpup1";
 }
 
 window.onerror=function(msg, srcdoc, ln, col, errmsg) {
   var ins;
   var pre_ins = "<span class='ecpupg'>"; 
-  var post_ins= " {loc}</span> [" + errmsg + "] <span class='ecpupb'>(" + srcdoc + ")</span><hr />";
-  var css_ln=ecpup_CSSlines;
-  var js_ln=ecpup_JSlines;
-  
-  if(!ecpup_ready) {
-    ins = pre_ins + "{ln}:" + col + post_ins;
-    ecpup_queue.push([ins, ln, col, css_ln, js_ln]); // css_ln and js_ln have both been ===false
+  var post_ins= " [" + errmsg + "] <span class='ecpupb'>(" + srcdoc + ")</span><hr />";
+  var css_ln = ecpup_CSSlines;
+  var js_ln = ecpup_JSlines;
+
+  var adjloc="{loc}";
+  var adjline="{ln}";
+  if(ecpup_ready) {
+    // var adjline = ln-(css_ln+js_ln)+2;
+    var repaired = ecpup_getLineAndSection(ln);
+    adjloc = repaired.loc;
+    adjline = repaired.ln;
   }
-  else {
-    ins = pre_ins + (ln-(css_ln+js_ln)+2) + ":" + col + post_ins
+  ins = pre_ins + adjline + ":" + col + " </span><span class='ecpupc'>" + adjloc + "</span>" + post_ins;
+
+  if(ecpup_ready) {
     ecpup_console.innerHTML += ins;
   }
-  return true; // set to false to cancel the event bubble [Original snippet: https://code.sololearn.com/WnfK9ry02dkS/?ref=app]
+  else { // errors that occur before the console is ready (calculate line/location later)
+    ecpup_queue.push([ins, ln, col, css_ln, js_ln]); 
+    // css_ln and js_ln have both been === false
+  }
+
+  if(ecpup_callback) {
+    var obj = {
+       message:msg,
+       source:srcdoc,
+       original_line:ln,
+       adjusted_line:adjline,
+       adjusted_location:adjloc,
+       column:col,
+       consoleReady:ecpup_ready,
+       consoleHTML:ins,
+    }
+    try { // can't have errors re-entering the error handler
+      ecpup_callback(obj);
+    } catch(e) {
+      ecpup_altcomms("Unable to execute callback: " + e.message + "\n" + JSON.stringify(obj)) 
+    }
+  }
+  if(ecpup_autopopup) { setTimeout(ecpup_doAutopop, 500); }
+  return true; // set to false to cancel the event bubble 
 }
 
 setTimeout(ecpup_waitready, 250);
-
-// insert order: error_console. [css tab] . [js tab] (css lines is 11, then err line 1 js = -css - 1)
