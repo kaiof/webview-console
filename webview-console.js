@@ -219,9 +219,13 @@ window.onerror=function(msg, srcdoc, ln, col, errmsg) {
   return true; // set to false to cancel the event bubble 
 }
 
-window.onunhandledrejection = function(event) {
+/*window.onunhandledrejection = function(event) {
    if(ecpup_silencePromiseRejections){event.preventDefault();}
    throw(new Error("(Unhandled Promise rejection; Use bluebird for stack traces) " + event.promise + " | "+ event.reason));
-}
+}*/
+window.addEventListener("unhandledrejection",function(event) {
+  if(ecpup_silencePromiseRejections){event.preventDefault();}
+  throw(new Error("(Unhandled Promise rejection; Use bluebird for stack traces) " + event.promise + " | "+ event.reason))
+});
 
 setTimeout(ecpup_waitready, 250);
