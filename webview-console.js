@@ -9,6 +9,7 @@ var ecpup_jsEnd = false;
 var ecpup_adjustJS = 2; // skip doctype and html start tag
 var ecpup_callback = false;
 var ecpup_autopopup = true;
+var ecpup_silencePromiseRejections = true;
 
 function ecpup_count(o) {
   switch (typeof o) {
@@ -216,6 +217,11 @@ window.onerror=function(msg, srcdoc, ln, col, errmsg) {
   }
   if(ecpup_autopopup) { setTimeout(ecpup_doAutopop, 500); }
   return true; // set to false to cancel the event bubble 
+}
+
+window.onunhandledrejection = function(event) {
+   if(ecpup_silencePromiseRejections){event.preventDefault();}
+   throw(new Error("(Unhandled Promise rejection; Use bluebird for stack traces) " + event.promise + " | "+ event.reason));
 }
 
 setTimeout(ecpup_waitready, 250);
